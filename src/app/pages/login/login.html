@@ -1,0 +1,42 @@
+<div class="flex items-center justify-center min-h-screen bg-gray-100">
+  <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-xl">
+    <h2 class="text-2xl font-bold text-center text-gray-800">Login</h2>
+
+    <form (ngSubmit)="onSubmit()" [formGroup]="loginForm" class="space-y-4">
+      <mat-form-field appearance="fill" class="w-full">
+        <mat-label>Username</mat-label>
+        <input matInput formControlName="username" type="text" required />
+        <mat-error *ngIf="loginForm.get('username')?.hasError('required')">
+          Username is required
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="w-full">
+        <mat-label>Password</mat-label>
+        <input matInput formControlName="password" type="password" required />
+        <mat-error *ngIf="loginForm.get('password')?.hasError('required')">
+          Password is required
+        </mat-error>
+      </mat-form-field>
+
+      <!-- Show server error message -->
+      <div *ngIf="errorMessage" class="text-red-600 text-center mb-4">
+        {{ errorMessage }}
+      </div>
+
+      <button
+        mat-flat-button
+        color="primary"
+        class="w-full"
+        [disabled]="loginForm.invalid || loading"
+      >
+        <ng-container *ngIf="loading; else notLoading">
+          Loading...
+        </ng-container>
+        <ng-template #notLoading>
+          Log In
+        </ng-template>
+      </button>
+    </form>
+  </div>
+</div>

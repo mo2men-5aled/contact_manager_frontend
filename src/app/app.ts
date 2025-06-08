@@ -1,12 +1,20 @@
+import { NgIf } from '@angular/common';
 import { Component } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet } from '@angular/router';
+import { HeaderComponent } from './components/header/header';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
-  templateUrl: './app.html',
-  styleUrl: './app.css'
+  standalone: true,
+  imports: [RouterOutlet, NgIf, HeaderComponent],
+  templateUrl: './app.html'
 })
 export class App {
-  protected title = 'contact_manager_frontend';
+  constructor(private router: Router) {}
+
+  shouldShowHeader(): boolean {
+    const hiddenRoutes = ['/login', '/register']; // add any other routes you want to exclude
+    return !hiddenRoutes.includes(this.router.url);
+  }
+
 }
