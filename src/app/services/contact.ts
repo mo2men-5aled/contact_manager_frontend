@@ -13,7 +13,8 @@ export interface Contact {
 
 export interface ContactListResponse {
   contacts: Contact[];
-  total: number;
+  totalContacts: number;
+  totalPages: number;
   page: number;
   limit: number;
 }
