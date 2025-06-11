@@ -13,14 +13,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatPaginator, PageEvent } from '@angular/material/paginator';
 import { MatTableDataSource } from '@angular/material/table';
 import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { Inject } from '@angular/core';
+import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { AddContactDialogComponent } from '../../components/add-contact-dialog.component/add-contact-dialog.component';
+import { MatSelectModule } from '@angular/material/select';
 
 @Component({
   selector: 'app-contact-dashboard',
@@ -31,7 +30,7 @@ import { AddContactDialogComponent } from '../../components/add-contact-dialog.c
     FormsModule, NgIf, MatProgressSpinnerModule, MatButtonModule,
     MatFormFieldModule, MatInputModule, MatCardModule, MatIconModule,
     MatSnackBarModule, MatPaginatorModule, MatTableModule, MatToolbarModule,
-    MatDialogModule
+    MatDialogModule, MatSelectModule
   ],
 })
 export class ContactDashboardPage implements OnInit, OnDestroy {
@@ -49,14 +48,14 @@ export class ContactDashboardPage implements OnInit, OnDestroy {
     notes: '',
   };
   newContact: Contact = {
-  _id: '',
-  name: '',
-  phone: '',
-  address: '',
-  notes: '',
-};
+    _id: '',
+    name: '',
+    phone: '',
+    address: '',
+    notes: '',
+  };
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  items_per_page = [5, 10, 20, 50];
 
   lockedContacts: { [key: string]: string } = {};
   userId: string = Math.random().toString(36).substring(2, 15);
@@ -64,6 +63,14 @@ export class ContactDashboardPage implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
 
   searchQuery: string = '';
+
+  currentPage = 1;
+  pageSize = 5;
+  totalPages = 1;
+
+  filterName = '';
+  filterPhone = '';
+  filterAddress = '';
 
   constructor(
     private contactService: ContactService,
@@ -93,6 +100,11 @@ export class ContactDashboardPage implements OnInit, OnDestroy {
       this.socketService.onContactUnlocked().subscribe(({ contactId }) => {
         delete this.lockedContacts[contactId];
         this.cdr.detectChanges();
+        this.loadContacts(this.currentPage, this.pageSize, {
+          name: this.filterName,
+          phone: this.filterPhone,
+          address: this.filterAddress
+        });
       }),
 
       this.socketService.onLockError().subscribe(({ message }) => {
@@ -114,9 +126,11 @@ export class ContactDashboardPage implements OnInit, OnDestroy {
     this.contactService.getContacts(page, limit, filters).subscribe({
       next: (res: ContactListResponse) => {
         this.contacts = res.contacts;
-        this.totalContacts = res.total;
+        this.totalContacts = res.totalContacts;
         this.dataSource = new MatTableDataSource<Contact>(this.contacts);
-        if (this.paginator) this.dataSource.paginator = this.paginator;
+        this.currentPage = res.page;
+        this.pageSize = res.limit;
+        this.totalPages = res.totalPages;
         this.isLoading = false;
         this.cdr.detectChanges();
       },
@@ -131,6 +145,12 @@ export class ContactDashboardPage implements OnInit, OnDestroy {
   startEdit(contact: Contact) {
     if (!contact._id) return;
     if (this.isLockedByOtherUser(contact._id)) return;
+
+    // If already editing another contact, unlock it first
+    if (this.editingId && this.editingId !== contact._id) {
+      this.socketService.unlockContact(this.editingId, this.userId);
+    }
+
     this.socketService.lockContact(contact._id, this.userId);
     this.editingId = contact._id;
     this.editableContact = { ...contact };
@@ -152,24 +172,26 @@ export class ContactDashboardPage implements OnInit, OnDestroy {
 
   saveEdit(id: string | null) {
     if (!id) return;
+    this.isLoading = true;
     const contactInput: ContactInput = {
       name: this.editableContact.name,
       phone: this.editableContact.phone,
       address: this.editableContact.address,
       notes: this.editableContact.notes
     };
-    this.contactService.updateContact(id, contactInput).subscribe(() => {
-      this.socketService.unlockContact(id, this.userId);
-      this.editingId = null;
-      this.editableContact = {
-        _id: '',
-        name: '',
-        phone: '',
-        address: '',
-        notes: '',
-      };
-      this.loadContacts();
-      this.snackBar.open('Contact updated!', 'Close', { duration: 2000 });
+    this.contactService.updateContact(id, contactInput).subscribe({
+      next: () => {
+        this.socketService.unlockContact(id, this.userId);
+        this.editingId = null;
+        this.editableContact = { _id: '', name: '', phone: '', address: '', notes: '' };
+        this.loadContacts();
+        this.snackBar.open('Contact updated!', 'Close', { duration: 2000 });
+        this.isLoading = false;
+      },
+      error: (error) => {
+        this.snackBar.open('Error updating contact', 'Close', { duration: 2000 });
+        this.isLoading = false;
+      }
     });
   }
 
@@ -200,18 +222,30 @@ export class ContactDashboardPage implements OnInit, OnDestroy {
   }
 
   applyFilter() {
-    this.loadContacts(1, 5, {
-      name: this.searchQuery,
-      phone: this.searchQuery,
-      address: this.searchQuery
+    this.loadContacts(1, this.pageSize, {
+      name: this.filterName,
+      phone: this.filterPhone,
+      address: this.filterAddress
     });
   }
 
-  onPageChange(event: PageEvent) {
-    this.loadContacts(event.pageIndex + 1, event.pageSize, {
-      name: this.searchQuery,
-      phone: this.searchQuery,
-      address: this.searchQuery
+  onPageChange(page: number) {
+    if (page < 1 || page > this.totalPages) return;
+    this.currentPage = page;
+    this.loadContacts(this.currentPage, this.pageSize, {
+      name: this.filterName,
+      phone: this.filterPhone,
+      address: this.filterAddress
+    });
+  }
+
+  onPageSizeChange(newSize: number) {
+    this.pageSize = newSize;
+    this.currentPage = 1;
+    this.loadContacts(this.currentPage, this.pageSize, {
+      name: this.filterName,
+      phone: this.filterPhone,
+      address: this.filterAddress
     });
   }
 
