@@ -1,56 +1,82 @@
-.contact-dashboard {
-  max-width: 900px;
-  margin: 2rem auto;
-  padding: 0 1rem;
-  font-family: Roboto, "Helvetica Neue", sans-serif;
+.dashboard-modern-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
-h1 {
-  text-align: center;
-  margin-bottom: 2rem;
-  font-weight: 700;
-  color: #3f51b5;
+.dashboard-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-.loading-container {
+.toolbar-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.dashboard-content {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  margin: 3rem 0;
-  color: #3f51b5;
+  align-items: flex-start;
+  padding: 2rem 0;
 }
 
-.contacts-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-
-.contact-card {
-  transition: box-shadow 0.3s ease;
-  position: relative;
+.dashboard-card {
+  width: 100%;
+  max-width: 1100px;
+  padding: 2rem;
+  border-radius: 18px;
   background: #fff;
-  border-radius: 8px;
+  box-shadow: 0 4px 32px rgba(44, 62, 80, 0.08);
+}
+
+.dashboard-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard-search {
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-table-container {
+  overflow-x: auto;
+  background: #fafbfc;
+  border-radius: 12px;
   padding: 1rem;
 }
 
-.contact-card:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+.locked {
+  color: #f44336;
+  font-weight: 500;
 }
 
-.inline-field {
-  width: 45%;
-  margin-right: 1rem;
-}
-
-.full-width {
+.dialog-field {
   width: 100%;
+  margin-bottom: 1rem;
 }
 
-mat-card-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  padding-top: 1rem;
+@media (max-width: 900px) {
+  .dashboard-card {
+    padding: 1rem;
+  }
+  .dashboard-header-row {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+}
+
+
+.inline-edit-field {
+  width: 120px;
+  margin: 0;
+  padding: 0;
 }

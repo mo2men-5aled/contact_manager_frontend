@@ -18,6 +18,13 @@ export interface ContactListResponse {
   limit: number;
 }
 
+export interface ContactInput {
+  name: string;
+  phone: string;
+  address: string;
+  notes: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })

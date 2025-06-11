@@ -1,9 +1,8 @@
 import { NgFor, NgIf } from '@angular/common';
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { ContactService, Contact, ContactListResponse } from '../../services/contact';
-import { MatDialog } from '@angular/material/dialog';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
+import { ContactService, Contact, ContactListResponse, ContactInput } from '../../services/contact';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { SocketService } from '../../services/socket.service';
+import { LockSocketService } from '../../services/lock-socket.service';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { ChangeDetectorRef } from '@angular/core';
@@ -14,15 +13,32 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatPaginator, PageEvent } from '@angular/material/paginator';
+import { MatTableDataSource } from '@angular/material/table';
+import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule } from '@angular/material/paginator';
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog } from '@angular/material/dialog';
+import { Inject } from '@angular/core';
+import { AddContactDialogComponent } from '../../components/add-contact-dialog.component/add-contact-dialog.component';
 
 @Component({
   selector: 'app-contact-dashboard',
   templateUrl: './dashboard.html',
+  styleUrls: ['./dashboard.css'],
   standalone: true,
-  imports: [FormsModule, NgIf, NgFor, MatProgressSpinnerModule,MatButtonModule,MatFormFieldModule, MatInputModule, MatCardModule, MatIconModule, MatSnackBarModule],
+  imports: [
+    FormsModule, NgIf, MatProgressSpinnerModule, MatButtonModule,
+    MatFormFieldModule, MatInputModule, MatCardModule, MatIconModule,
+    MatSnackBarModule, MatPaginatorModule, MatTableModule, MatToolbarModule,
+    MatDialogModule
+  ],
 })
 export class ContactDashboardPage implements OnInit, OnDestroy {
+  displayedColumns: string[] = ['name', 'phone', 'address', 'notes', 'actions'];
   contacts: Contact[] = [];
+  dataSource = new MatTableDataSource<Contact>([]);
+  totalContacts = 0;
   isLoading = true;
   editingId: string | null = null;
   editableContact: Contact = {
@@ -39,60 +55,53 @@ export class ContactDashboardPage implements OnInit, OnDestroy {
   address: '',
   notes: '',
 };
-addContact() {
-  if (!this.newContact.name || !this.newContact.phone) {
-    alert('Name and Phone are required');
-    return;
-  }
 
-  this.contactService.addContact(this.newContact).subscribe(() => {
-    this.loadContacts();
-    this.resetNewContact();
-    this.snackBar.open('Contact added successfully!', 'Close', { duration: 3000 });
-  });
-}
-
-private resetNewContact() {
-  this.newContact = {
-    _id: '',
-    name: '',
-    phone: '',
-    address: '',
-    notes: '',
-  };
-}
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   lockedContacts: { [key: string]: string } = {};
   userId: string = Math.random().toString(36).substring(2, 15);
 
   private subscriptions: Subscription[] = [];
 
+  searchQuery: string = '';
+
   constructor(
     private contactService: ContactService,
-    private dialog: MatDialog,
-    private socketService: SocketService,
+    private socketService: LockSocketService,
     private cdr: ChangeDetectorRef,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private dialog: MatDialog
   ) {}
 
   ngOnInit() {
     this.loadContacts();
 
     this.subscriptions.push(
-      this.socketService.onContactLocked().subscribe(({ contactId, userId }) => {
-        this.lockedContacts[contactId] = userId;
+      this.socketService.onContactLocked().subscribe(({ contactId, username }) => {
+        this.lockedContacts[contactId] = username;
+        this.cdr.detectChanges();
 
-        if (userId !== this.userId) {
+        if (username !== this.userId) {
           this.snackBar.open(
-            `User ${userId} is updating contact with ID ${contactId}`,
+            `Contact is being edited by another user`,
             'Close',
-            { duration: 4000 }
+            { duration: 3000 }
           );
         }
       }),
+
       this.socketService.onContactUnlocked().subscribe(({ contactId }) => {
         delete this.lockedContacts[contactId];
-      })
+        this.cdr.detectChanges();
+      }),
+
+      this.socketService.onLockError().subscribe(({ message }) => {
+        this.snackBar.open(message, 'Close', { duration: 3000 });
+      }),
+
+      // this.socketService.onContactUpdated().subscribe(contactId => {
+      //   this.loadContacts();
+      // })
     );
   }
 
@@ -100,25 +109,30 @@ private resetNewContact() {
     this.subscriptions.forEach((sub) => sub.unsubscribe());
   }
 
-  loadContacts() {
+  loadContacts(page: number = 1, limit: number = 5, filters: any = {}) {
     this.isLoading = true;
-    this.contactService.getContacts().subscribe((res: ContactListResponse) => {
-      this.contacts = res.contacts;
-      this.isLoading = false;
-      this.cdr.detectChanges();
+    this.contactService.getContacts(page, limit, filters).subscribe({
+      next: (res: ContactListResponse) => {
+        this.contacts = res.contacts;
+        this.totalContacts = res.total;
+        this.dataSource = new MatTableDataSource<Contact>(this.contacts);
+        if (this.paginator) this.dataSource.paginator = this.paginator;
+        this.isLoading = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        this.snackBar.open('Error loading contacts', 'Close', { duration: 3000 });
+        this.isLoading = false;
+        this.cdr.detectChanges();
+      }
     });
   }
 
   startEdit(contact: Contact) {
-    const id = contact._id;
-    if (!id) return alert('Invalid contact ID.');
-
-    if (this.isLockedByOtherUser(id)) {
-      return alert('This contact is currently being edited by someone else.');
-    }
-
-    this.socketService.lockContact(id, this.userId);
-    this.editingId = id;
+    if (!contact._id) return;
+    if (this.isLockedByOtherUser(contact._id)) return;
+    this.socketService.lockContact(contact._id, this.userId);
+    this.editingId = contact._id;
     this.editableContact = { ...contact };
   }
 
@@ -127,27 +141,56 @@ private resetNewContact() {
       this.socketService.unlockContact(this.editingId, this.userId);
     }
     this.editingId = null;
-    this.resetEditableContact();
+    this.editableContact = {
+      _id: '',
+      name: '',
+      phone: '',
+      address: '',
+      notes: '',
+    };
   }
 
-
-
   saveEdit(id: string | null) {
-    if (!id) return alert('Invalid contact ID.');
-
-    this.contactService.updateContact(id, this.editableContact).subscribe(() => {
+    if (!id) return;
+    const contactInput: ContactInput = {
+      name: this.editableContact.name,
+      phone: this.editableContact.phone,
+      address: this.editableContact.address,
+      notes: this.editableContact.notes
+    };
+    this.contactService.updateContact(id, contactInput).subscribe(() => {
       this.socketService.unlockContact(id, this.userId);
       this.editingId = null;
-      this.resetEditableContact();
+      this.editableContact = {
+        _id: '',
+        name: '',
+        phone: '',
+        address: '',
+        notes: '',
+      };
       this.loadContacts();
+      this.snackBar.open('Contact updated!', 'Close', { duration: 2000 });
     });
   }
 
   deleteContact(id: string | undefined) {
-    if (!id) return alert('Invalid contact ID.');
-
-    this.contactService.deleteContact(id).subscribe(() => {
-      this.loadContacts();
+    if (!id) {
+      this.snackBar.open('Invalid contact ID', 'Close', { duration: 3000 });
+      return;
+    }
+    if (this.isLockedByOtherUser(id)) {
+      this.snackBar.open('Cannot delete: Contact is being edited by another user', 'Close', { duration: 3000 });
+      return;
+    }
+    this.contactService.deleteContact(id).subscribe({
+      next: () => {
+        this.loadContacts();
+        this.snackBar.open('Contact deleted successfully', 'Close', { duration: 3000 });
+      },
+      error: (error) => {
+        this.snackBar.open('Error deleting contact', 'Close', { duration: 3000 });
+        console.error('Error deleting contact:', error);
+      }
     });
   }
 
@@ -156,13 +199,41 @@ private resetNewContact() {
     return contactId in this.lockedContacts && this.lockedContacts[contactId] !== this.userId;
   }
 
-  private resetEditableContact() {
-    this.editableContact = {
-      _id: '',
-      name: '',
-      phone: '',
-      address: '',
-      notes: '',
-    };
+  applyFilter() {
+    this.loadContacts(1, 5, {
+      name: this.searchQuery,
+      phone: this.searchQuery,
+      address: this.searchQuery
+    });
+  }
+
+  onPageChange(event: PageEvent) {
+    this.loadContacts(event.pageIndex + 1, event.pageSize, {
+      name: this.searchQuery,
+      phone: this.searchQuery,
+      address: this.searchQuery
+    });
+  }
+
+  addContact(contactInput: ContactInput) {
+    this.contactService.addContact(contactInput).subscribe(() => {
+      this.loadContacts();
+      this.snackBar.open('Contact added!', 'Close', { duration: 2000 });
+    });
+  }
+
+  logout() {
+    // Implement your logout logic here
+  }
+
+  openAddDialog() {
+    const dialogRef = this.dialog.open(AddContactDialogComponent, {
+      width: '400px'
+    });
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.addContact(result);
+      }
+    });
   }
 }

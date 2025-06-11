@@ -1,141 +1,113 @@
-<section class="contact-dashboard" aria-label="Contacts Dashboard">
-  <h1>Contacts Dashboard</h1>
+<div class="dashboard-modern-container">
+  <div class="dashboard-content">
+    <mat-card class="dashboard-card">
+      <div class="dashboard-header-row">
+        <h2>Contacts</h2>
+        <button mat-fab color="accent" (click)="openAddDialog()">
+          <mat-icon>add</mat-icon>
+        </button>
+      </div>
 
-  <!-- Add Contact Form -->
-  <form (ngSubmit)="addContact()" aria-label="Add new contact" #addContactForm="ngForm" class="add-contact-form">
-    <fieldset>
-      <legend>Add New Contact</legend>
-
-      <mat-form-field appearance="outline" class="inline-field">
-        <mat-label>Name</mat-label>
-        <input matInput name="newName" [(ngModel)]="newContact.name" required aria-required="true" />
+      <mat-form-field class="dashboard-search">
+        <mat-label>Search contacts</mat-label>
+        <input matInput [(ngModel)]="searchQuery" (keyup)="applyFilter()" placeholder="Name, phone, or address" />
+        <mat-icon matSuffix>search</mat-icon>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="inline-field">
-        <mat-label>Phone</mat-label>
-        <input matInput name="newPhone" [(ngModel)]="newContact.phone" required aria-required="true" />
-      </mat-form-field>
+      <div class="dashboard-table-container">
+        <table mat-table [dataSource]="dataSource" class="mat-elevation-z2" matSort>
 
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Address</mat-label>
-        <input matInput name="newAddress" [(ngModel)]="newContact.address" />
-      </mat-form-field>
+          <!-- Name -->
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Name</th>
+            <td mat-cell *matCellDef="let c">
+              <ng-container *ngIf="editingId === c._id; else nameDisplay">
+                <mat-form-field class="inline-edit-field">
+                  <input matInput [(ngModel)]="editableContact.name" name="editName" required />
+                </mat-form-field>
+              </ng-container>
+              <ng-template #nameDisplay>
+                <span [class.locked]="isLockedByOtherUser(c._id)">
+                  {{ c.name }}
+                  <mat-icon *ngIf="isLockedByOtherUser(c._id)" color="warn" matTooltip="Being edited by another user">lock</mat-icon>
+                </span>
+              </ng-template>
+            </td>
+          </ng-container>
 
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Notes</mat-label>
-        <textarea matInput rows="3" name="newNotes" [(ngModel)]="newContact.notes"></textarea>
-      </mat-form-field>
+          <!-- Phone -->
+          <ng-container matColumnDef="phone">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Phone</th>
+            <td mat-cell *matCellDef="let c">
+              <ng-container *ngIf="editingId === c._id; else phoneDisplay">
+                <mat-form-field class="inline-edit-field">
+                  <input matInput [(ngModel)]="editableContact.phone" name="editPhone" required />
+                </mat-form-field>
+              </ng-container>
+              <ng-template #phoneDisplay>
+                {{ c.phone }}
+              </ng-template>
+            </td>
+          </ng-container>
 
-      <button mat-flat-button color="primary" type="submit" [disabled]="addContactForm.invalid">
-        Add Contact
-      </button>
-    </fieldset>
-  </form>
+          <!-- Address -->
+          <ng-container matColumnDef="address">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Address</th>
+            <td mat-cell *matCellDef="let c">
+              <ng-container *ngIf="editingId === c._id; else addressDisplay">
+                <mat-form-field class="inline-edit-field">
+                  <input matInput [(ngModel)]="editableContact.address" name="editAddress" />
+                </mat-form-field>
+              </ng-container>
+              <ng-template #addressDisplay>
+                {{ c.address }}
+              </ng-template>
+            </td>
+          </ng-container>
 
-  <div *ngIf="isLoading" class="loading-container" role="status" aria-live="polite" aria-busy="true">
-    <mat-progress-spinner
-      mode="indeterminate"
-      diameter="60"
-      strokeWidth="5"
-      color="primary"
-      aria-label="Loading contacts"
-    ></mat-progress-spinner>
-    <p>Loading contacts...</p>
+          <!-- Notes -->
+          <ng-container matColumnDef="notes">
+            <th mat-header-cell *matHeaderCellDef>Notes</th>
+            <td mat-cell *matCellDef="let c">
+              <ng-container *ngIf="editingId === c._id; else notesDisplay">
+                <mat-form-field class="inline-edit-field">
+                  <input matInput [(ngModel)]="editableContact.notes" name="editNotes" />
+                </mat-form-field>
+              </ng-container>
+              <ng-template #notesDisplay>
+                {{ c.notes }}
+              </ng-template>
+            </td>
+          </ng-container>
+
+          <!-- Actions -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let c">
+              <ng-container *ngIf="editingId === c._id; else actionButtons">
+                <button mat-icon-button color="primary" (click)="saveEdit(c._id)" [disabled]="!editableContact.name || !editableContact.phone" matTooltip="Save">
+                  <mat-icon>check</mat-icon>
+                </button>
+                <button mat-icon-button (click)="cancelEdit()" matTooltip="Cancel">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </ng-container>
+              <ng-template #actionButtons>
+                <button mat-icon-button color="primary" (click)="startEdit(c)" [disabled]="isLockedByOtherUser(c._id)" matTooltip="Edit">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button color="warn" (click)="deleteContact(c._id)" [disabled]="isLockedByOtherUser(c._id)" matTooltip="Delete">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </ng-template>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+        <mat-paginator [length]="totalContacts" [pageSize]="5" (page)="onPageChange($event)"></mat-paginator>
+      </div>
+    </mat-card>
   </div>
-
-  <ul *ngIf="!isLoading" class="contacts-list" role="list">
-    <li *ngFor="let contact of contacts" class="contact-card" role="listitem">
-      <mat-card>
-        <!-- Show normal view if not editing this contact -->
-        <div *ngIf="editingId !== contact._id; else editTemplate">
-          <mat-card-header>
-            <mat-card-title>{{ contact.name }}</mat-card-title>
-            <mat-card-subtitle>{{ contact.phone }}</mat-card-subtitle>
-          </mat-card-header>
-
-          <mat-card-content>
-            <p><strong>Address:</strong> {{ contact.address }}</p>
-            <p><strong>Notes:</strong> {{ contact.notes }}</p>
-          </mat-card-content>
-
-          <mat-card-actions>
-            <button
-              mat-icon-button
-              color="primary"
-              (click)="startEdit(contact)"
-              [attr.aria-label]="'Edit contact ' + contact.name"
-            >
-              <mat-icon>edit</mat-icon>
-            </button>
-
-            <button
-              mat-icon-button
-              color="warn"
-              (click)="deleteContact(contact._id)"
-              [attr.aria-label]="'Delete contact ' + contact.name"
-            >
-              <mat-icon>delete</mat-icon>
-            </button>
-          </mat-card-actions>
-        </div>
-
-        <!-- Inline edit form -->
-        <ng-template #editTemplate>
-          <mat-card-header>
-            <mat-form-field appearance="outline" class="inline-field">
-              <mat-label>Name</mat-label>
-              <input
-                matInput
-                [(ngModel)]="editableContact.name"
-                name="name"
-                required
-                aria-required="true"
-              />
-            </mat-form-field>
-
-            <mat-form-field appearance="outline" class="inline-field">
-              <mat-label>Phone</mat-label>
-              <input
-                matInput
-                [(ngModel)]="editableContact.phone"
-                name="phone"
-                required
-                aria-required="true"
-              />
-            </mat-form-field>
-          </mat-card-header>
-
-          <mat-card-content>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Address</mat-label>
-              <input
-                matInput
-                [(ngModel)]="editableContact.address"
-                name="address"
-              />
-            </mat-form-field>
-
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Notes</mat-label>
-              <textarea
-                matInput
-                rows="3"
-                [(ngModel)]="editableContact.notes"
-                name="notes"
-              ></textarea>
-            </mat-form-field>
-          </mat-card-content>
-
-          <mat-card-actions>
-            <button mat-flat-button color="primary" (click)="saveEdit(editingId)">
-              Save
-            </button>
-            <button mat-stroked-button color="warn" (click)="cancelEdit()">
-              Cancel
-            </button>
-          </mat-card-actions>
-        </ng-template>
-      </mat-card>
-    </li>
-  </ul>
-</section>
+</div>

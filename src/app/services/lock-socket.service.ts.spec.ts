@@ -1,13 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 
-import { SocketService } from './socket.service';
+import { LockSocketServiceTs } from './lock-socket.service.ts';
 
-describe('SocketService', () => {
-  let service: SocketService;
+describe('LockSocketServiceTs', () => {
+  let service: LockSocketServiceTs;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
-    service = TestBed.inject(SocketService);
+    service = TestBed.inject(LockSocketServiceTs);
   });
 
   it('should be created', () => {
